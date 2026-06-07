@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vector Stores — Brute Force vs HNSW</title>
+<style>
+  :root{--bg:#030710;--panel:#0c1426;--panel2:#111c33;--ink:#e8eefc;--muted:#8da2c9;
+    --line:#1e2c4a;--blue:#006DDD;--sky:#7FC8FF;--green:#36d399;--violet:#a78bfa;--amber:#fbbf24;--red:#f87171;--radius:14px;--shadow:0 10px 30px rgba(0,0,0,.45)}
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 50% -10%,#0a1730,transparent),var(--bg);
+    color:var(--ink);font-family:'Inter',system-ui,Segoe UI,Roboto,sans-serif;line-height:1.5;padding:32px 18px 60px}
+  .wrap{max-width:880px;margin:0 auto}
+  h1{font-size:24px;margin:0 0 4px;letter-spacing:-.02em}
+  .sub{color:var(--muted);margin:0 0 18px;font-size:14px}
+  .controls{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+  button{background:var(--panel);border:1px solid var(--line);color:var(--ink);border-radius:9px;padding:9px 14px;font-size:13px;cursor:pointer}
+  button.primary{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600}
+  button.on{border-color:var(--sky);box-shadow:0 0 0 1px var(--sky)}
+  .mapbox{background:#06101f;border:1px solid var(--line);border-radius:14px;padding:8px;box-shadow:var(--shadow)}
+  svg{width:100%;height:auto;display:block}
+  .dot{fill:var(--violet)}
+  .filtered{fill:#26314d}
+  .scan{fill:var(--amber)}
+  .hit{fill:var(--green)}
+  .q{fill:var(--sky)}
+  .edge{stroke:#1d3a6b;stroke-width:1}
+  .path{stroke:var(--sky);stroke-width:2.5;fill:none;stroke-linecap:round}
+  .stat{display:flex;gap:22px;margin-top:14px;font-size:13px;color:var(--muted);flex-wrap:wrap}
+  .stat b{color:var(--ink)}
+  .legend{font-size:12px;color:var(--muted);margin-top:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Finding Nearest Vectors — Fast</h1>
+  <p class="sub">The same query, two ways. <b>Brute force</b> checks every point. <b>HNSW</b> hops along graph “highways” to the neighbourhood, checking only a few. Toggle the metadata filter to see precision improve.</p>
+  <div class="controls">
+    <button class="primary" id="brute">Run brute force</button>
+    <button class="primary" id="hnsw">Run HNSW hop</button>
+    <button id="filter">Metadata filter: OFF</button>
+    <button id="reset">Reset</button>
+  </div>
+  <div class="mapbox"><svg viewBox="0 0 400 300" id="svg"></svg></div>
+  <div class="stat">
+    <span>comparisons: <b id="cmp">0</b></span>
+    <span>nearest found: <b id="found">—</b></span>
+    <span>mode: <b id="mode">idle</b></span>
+  </div>
+  <p class="legend">Brute force is accurate but O(n). HNSW is approximate but ~O(log n) — the reason vector DBs stay fast at millions of vectors. Filtering removes off-topic points <i>before</i> ranking.</p>
+</div>
+<script>
+  const q={x:210,y:150};
+  // points with a "topic" flag for filtering
+  const pts=[];
+  const rnd=(s)=>{let x=Math.sin(s)*10000;return x-Math.floor(x);};
+  for(let i=0;i<46;i++){pts.push({x:30+rnd(i)*340,y:30+rnd(i+99)*240,topic:rnd(i+7)>0.45});}
+  // graph edges (simple: connect each to 2 nearest) for hnsw illusion
+  function nearestList(from,arr,n){return arr.map(p=>({p,d:Math.hypot(p.x-from.x,p.y-from.y)})).sort((a,b)=>a.d-b.d).slice(0,n).map(o=>o.p);}
+  const svg=document.getElementById('svg');
+  let filterOn=false;
+  function active(){return filterOn?pts.filter(p=>p.topic):pts;}
+  function base(extra=''){
+    let s='';
+    // edges for hnsw vibe
+    pts.forEach(p=>{nearestList(p,pts,2).forEach(n=>{s+='<line class="edge" x1="'+p.x+'" y1="'+p.y+'" x2="'+n.x+'" y2="'+n.y+'"/>';});});
+    pts.forEach(p=>{const cls=(filterOn&&!p.topic)?'filtered':'dot';s+='<circle class="'+cls+'" cx="'+p.x+'" cy="'+p.y+'" r="4.5"/>';});
+    s+=extra;
+    s+='<circle class="q" cx="'+q.x+'" cy="'+q.y+'" r="7"/><text x="'+(q.x+9)+'" y="'+(q.y-7)+'" style="fill:#7FC8FF;font-size:10px;font-weight:700">query</text>';
+    svg.innerHTML=s;
+  }
+  function setStat(cmp,found,mode){document.getElementById('cmp').textContent=cmp;document.getElementById('found').textContent=found;document.getElementById('mode').textContent=mode;}
+  function brute(){
+    const arr=active();let i=0;base();
+    const timer=setInterval(()=>{
+      if(i>=arr.length){clearInterval(timer);finishBrute(arr);return;}
+      const p=arr[i];
+      base('<circle class="scan" cx="'+p.x+'" cy="'+p.y+'" r="6"/>');
+      setStat(i+1,'scanning…','brute force');i++;
+    },70);
+  }
+  function finishBrute(arr){
+    const best=nearestList(q,arr,1)[0];
+    base('<circle class="hit" cx="'+best.x+'" cy="'+best.y+'" r="7"/>');
+    setStat(arr.length,'✓ exact','brute force');
+  }
+  function hnsw(){
+    const arr=active();
+    // start from a far entry point, greedily hop toward q
+    let cur=nearestList({x:30,y:30},arr,1)[0];const path=[cur];let cmp=0;
+    for(let step=0;step<8;step++){
+      const neigh=nearestList(cur,arr,3);cmp+=neigh.length;
+      const better=neigh.reduce((b,n)=>Math.hypot(n.x-q.x,n.y-q.y)<Math.hypot(b.x-q.x,b.y-q.y)?n:b,cur);
+      if(better===cur)break;cur=better;path.push(cur);
+    }
+    let i=0;
+    const timer=setInterval(()=>{
+      if(i>=path.length){clearInterval(timer);
+        let pl='<polyline class="path" points="'+path.map(p=>p.x+','+p.y).join(' ')+'"/>';
+        base(pl+'<circle class="hit" cx="'+cur.x+'" cy="'+cur.y+'" r="7"/>');
+        setStat(cmp,'≈ approx','HNSW hop');return;}
+      let pl='<polyline class="path" points="'+path.slice(0,i+1).map(p=>p.x+','+p.y).join(' ')+'"/>';
+      base(pl+'<circle class="scan" cx="'+path[i].x+'" cy="'+path[i].y+'" r="6"/>');
+      setStat(cmp, 'hopping…','HNSW hop');i++;
+    },280);
+  }
+  document.getElementById('brute').onclick=brute;
+  document.getElementById('hnsw').onclick=hnsw;
+  document.getElementById('reset').onclick=()=>{base();setStat(0,'—','idle');};
+  document.getElementById('filter').onclick=(e)=>{filterOn=!filterOn;e.target.textContent='Metadata filter: '+(filterOn?'ON':'OFF');e.target.classList.toggle('on',filterOn);base();};
+  base();
+</script>
+</body>
+</html>

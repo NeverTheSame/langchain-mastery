@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Human-in-the-Loop</title>
+<style>
+  :root{--bg:#030710;--panel:#0c1426;--panel2:#111c33;--ink:#e8eefc;--muted:#8da2c9;
+    --line:#1e2c4a;--blue:#006DDD;--sky:#7FC8FF;--green:#36d399;--violet:#a78bfa;--amber:#fbbf24;--red:#f87171;--radius:14px;--shadow:0 10px 30px rgba(0,0,0,.45)}
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 50% -10%,#0a1730,transparent),var(--bg);
+    color:var(--ink);font-family:'Inter',system-ui,Segoe UI,Roboto,sans-serif;line-height:1.5;padding:32px 18px 60px}
+  .wrap{max-width:760px;margin:0 auto}
+  h1{font-size:24px;margin:0 0 4px;letter-spacing:-.02em}
+  .sub{color:var(--muted);margin:0 0 18px;font-size:14px}
+  .track{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+  .pill{padding:7px 12px;border-radius:20px;border:1px solid var(--line);font-size:12px;color:var(--muted);background:var(--panel)}
+  .pill.on{border-color:var(--sky);color:var(--sky);box-shadow:0 0 0 1px var(--sky)}
+  .pill.paused{border-color:var(--amber);color:var(--amber);box-shadow:0 0 0 1px var(--amber)}
+  .pill.done{border-color:var(--green);color:var(--green)}
+  .arrow{color:var(--muted)}
+  .card{background:#06101f;border:1px solid var(--line);border-radius:12px;padding:16px;min-height:120px}
+  .draft{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:12px;font-size:13px;margin:8px 0}
+  .draft label{font-size:11px;color:var(--muted);display:block;margin-bottom:3px}
+  .draft input{width:100%;background:#0a1424;border:1px solid var(--line);color:var(--ink);border-radius:7px;padding:7px 9px;font-size:13px}
+  .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  button{border:0;border-radius:9px;padding:9px 15px;font-size:13px;cursor:pointer;font-weight:600}
+  .approve{background:var(--green);color:#04130c}.edit{background:var(--amber);color:#1a1405}.reject{background:var(--red);color:#fff}
+  .ghost{background:var(--panel);border:1px solid var(--line);color:var(--ink);font-weight:400}
+  .out{font-size:13.5px;margin-top:6px}
+  .note{font-size:12.5px;color:var(--muted);margin-top:12px;min-height:34px}
+  .gate{font-size:12px;color:var(--amber)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>The Approval Gate</h1>
+  <p class="sub">The agent drafts a customer email. Because it's consequential, the graph hits <code>interrupt()</code> and <b>pauses</b>. You approve, edit, or reject — then it resumes down that path.</p>
+  <div class="track">
+    <span class="pill" id="p1">agent drafts</span><span class="arrow">→</span>
+    <span class="pill" id="p2">interrupt() · pause</span><span class="arrow">→</span>
+    <span class="pill" id="p3">human decides</span><span class="arrow">→</span>
+    <span class="pill" id="p4">resume</span>
+  </div>
+  <div class="card" id="card">
+    <button class="approve" id="start" style="background:var(--blue);color:#fff">▶ Run agent</button>
+  </div>
+  <div class="note" id="note">The agent will propose an action; you’ll be the human in the loop.</div>
+</div>
+<script>
+  const card=document.getElementById('card'),note=document.getElementById('note');
+  function setTrack(stage){
+    document.getElementById('p1').className='pill'+(stage>=1?' done':'');
+    document.getElementById('p2').className='pill'+(stage===2?' paused':stage>2?' done':'');
+    document.getElementById('p3').className='pill'+(stage===3?' on':stage>3?' done':'');
+    document.getElementById('p4').className='pill'+(stage>=4?' done':'');
+  }
+  document.getElementById('start').onclick=run;
+  function run(){
+    setTrack(1);
+    note.innerHTML='🧠 Agent generated a draft and requested the <code>send_email</code> tool — but the graph paused before executing it.';
+    setTimeout(()=>{setTrack(3);showGate();},500);
+  }
+  function showGate(){
+    card.innerHTML=
+      '<div class="gate">⏸ PAUSED at interrupt() — awaiting human decision (state checkpointed)</div>'+
+      '<div class="draft"><label>to</label><input id="to" value="biggest.client@acme.com"></div>'+
+      '<div class="draft"><label>body</label><input id="body" value="We are raising your price by 40% effective immediately."></div>'+
+      '<div class="actions">'+
+      '<button class="approve" id="ap">✓ Approve & send</button>'+
+      '<button class="edit" id="ed">✎ Edit then send</button>'+
+      '<button class="reject" id="rj">✕ Reject</button>'+
+      '</div>';
+    document.getElementById('ap').onclick=()=>resume('approve');
+    document.getElementById('ed').onclick=()=>resume('edit');
+    document.getElementById('rj').onclick=()=>resume('reject');
+  }
+  function resume(kind){
+    setTrack(4);
+    const to=document.getElementById('to').value, body=document.getElementById('body').value;
+    if(kind==='approve'){
+      card.innerHTML='<div class="out">▶ <b>Resumed with resume="approve"</b>.<br>📧 Email sent to <b>'+to+'</b>.<br><span style="color:var(--green)">status: sent</span></div>';
+      note.innerHTML='Command(resume="approve") injected your decision back into the node, which executed the tool.';
+    }else if(kind==='edit'){
+      card.innerHTML='<div class="out">✎ <b>update_state</b> wrote your edits, then <b>resume</b>.<br>📧 Sent to <b>'+to+'</b>:<br>“'+body+'”<br><span style="color:var(--amber)">status: sent (edited by human)</span></div>';
+      note.innerHTML='Edit/correct pattern: the human modified state via update_state before resuming — the agent sent the corrected version.';
+    }else{
+      card.innerHTML='<div class="out">✕ <b>Resumed with resume="reject"</b>.<br>🚫 No email sent. Graph routed down the reject edge.<br><span style="color:var(--red)">status: cancelled</span></div>';
+      note.innerHTML='Reject path: the graph needs an edge for "no" — here it cancels the action gracefully.';
+    }
+    card.innerHTML+='<button class="ghost" id="again" style="margin-top:12px">↻ Run again</button>';
+    document.getElementById('again').onclick=()=>{setTrack(0);card.innerHTML='<button class="approve" id="start" style="background:var(--blue);color:#fff">▶ Run agent</button>';document.getElementById('start').onclick=run;note.textContent='The agent will propose an action; you’ll be the human in the loop.';};
+  }
+  setTrack(0);
+</script>
+</body>
+</html>

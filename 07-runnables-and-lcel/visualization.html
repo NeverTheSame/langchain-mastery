@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Runnables & LCEL — Pipe Flow</title>
+<style>
+  :root{--bg:#030710;--panel:#0c1426;--panel2:#111c33;--ink:#e8eefc;--muted:#8da2c9;
+    --line:#1e2c4a;--blue:#006DDD;--sky:#7FC8FF;--green:#36d399;--violet:#a78bfa;--amber:#fbbf24;--radius:14px;--shadow:0 10px 30px rgba(0,0,0,.45)}
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 50% -10%,#0a1730,transparent),var(--bg);
+    color:var(--ink);font-family:'Inter',system-ui,Segoe UI,Roboto,sans-serif;line-height:1.5;padding:32px 18px 60px}
+  .wrap{max-width:880px;margin:0 auto}
+  h1{font-size:24px;margin:0 0 4px;letter-spacing:-.02em}
+  .sub{color:var(--muted);margin:0 0 22px;font-size:14px}
+  .pipe{display:flex;align-items:stretch;gap:0;flex-wrap:wrap}
+  .stage{flex:1;min-width:120px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;text-align:center;position:relative;transition:.3s}
+  .stage.flow{border-color:var(--sky);box-shadow:0 0 0 1px var(--sky)}
+  .stage .ic{font-size:22px}.stage .nm{font-size:13px;font-weight:600;margin-top:4px}
+  .stage .ty{font-size:10.5px;color:var(--muted);margin-top:3px;font-family:ui-monospace,monospace}
+  .arrow{display:flex;align-items:center;color:var(--blue);font-size:22px;font-weight:800;padding:0 6px}
+  .parallel{border-style:dashed;border-color:var(--violet)}
+  .parallel .nm{color:var(--violet)}
+  .out{margin-top:22px;background:#06101f;border:1px solid var(--line);border-radius:12px;padding:16px;min-height:84px;font-size:14px}
+  .out .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);display:block;margin-bottom:8px}
+  .tok{opacity:0;animation:pop .25s forwards}
+  @keyframes pop{to{opacity:1}}
+  .cursor{display:inline-block;width:7px;height:16px;background:var(--sky);margin-left:1px;animation:bl 1s steps(2) infinite;vertical-align:middle}
+  @keyframes bl{50%{opacity:0}}
+  .controls{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
+  button{background:var(--blue);color:#fff;border:0;border-radius:10px;padding:10px 16px;font-size:14px;cursor:pointer;font-weight:600}
+  button.ghost{background:var(--panel);border:1px solid var(--line);color:var(--ink)}
+  .note{font-size:12px;color:var(--muted);margin-top:14px}
+  code{color:var(--sky);font-family:ui-monospace,monospace}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>LCEL — Data Flows Through the Pipe</h1>
+  <p class="sub">A chain is just Runnables joined by <code>|</code>. Press play to watch input flow through each stage and stream out token-by-token — streaming you never had to write.</p>
+
+  <div class="pipe" id="pipe">
+    <div class="stage parallel" id="s0"><div class="ic">⑂</div><div class="nm">RunnableParallel</div><div class="ty">{context, question}</div></div>
+    <div class="arrow">→</div>
+    <div class="stage" id="s1"><div class="ic">📝</div><div class="nm">prompt</div><div class="ty">ChatPromptTemplate</div></div>
+    <div class="arrow">→</div>
+    <div class="stage" id="s2"><div class="ic">🧠</div><div class="nm">model</div><div class="ty">BaseChatModel</div></div>
+    <div class="arrow">→</div>
+    <div class="stage" id="s3"><div class="ic">🔤</div><div class="nm">parser</div><div class="ty">StrOutputParser</div></div>
+  </div>
+
+  <div class="out"><span class="lbl">streamed output</span><span id="stream"></span><span class="cursor" id="cur"></span></div>
+
+  <div class="controls"><button id="play">▶ Run the chain</button><button class="ghost" id="reset">Reset</button></div>
+  <p class="note">The dashed <span style="color:var(--violet)">parallel</span> stage fetches <code>context</code> (retriever) and passes <code>question</code> through at the same time — then both feed the prompt. Every stage is a Runnable, so <code>.stream()</code> works end-to-end automatically.</p>
+</div>
+<script>
+  const stages=['s0','s1','s2','s3'];
+  const answer="Retrieval-Augmented Generation grounds a model's answer in documents you fetch at query time, reducing hallucination.";
+  const stream=document.getElementById('stream'),cur=document.getElementById('cur');
+  let timer=null;
+  function clearFlow(){stages.forEach(s=>document.getElementById(s).classList.remove('flow'));}
+  function run(){
+    reset();let i=0;
+    function lightNext(){
+      if(i<stages.length){clearFlow();document.getElementById(stages[i]).classList.add('flow');i++;setTimeout(lightNext,420);}
+      else{clearFlow();document.getElementById('s3').classList.add('flow');streamOut();}
+    }
+    lightNext();
+  }
+  function streamOut(){
+    const words=answer.split(' ');let j=0;
+    timer=setInterval(()=>{
+      if(j>=words.length){clearInterval(timer);return;}
+      const sp=document.createElement('span');sp.className='tok';sp.textContent=(j?' ':'')+words[j];stream.appendChild(sp);j++;
+    },90);
+  }
+  function reset(){clearInterval(timer);clearFlow();stream.textContent='';}
+  document.getElementById('play').onclick=run;
+  document.getElementById('reset').onclick=reset;
+</script>
+</body>
+</html>

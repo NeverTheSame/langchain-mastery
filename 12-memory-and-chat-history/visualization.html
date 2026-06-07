@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Memory — Short-term vs Long-term</title>
+<style>
+  :root{--bg:#030710;--panel:#0c1426;--panel2:#111c33;--ink:#e8eefc;--muted:#8da2c9;
+    --line:#1e2c4a;--blue:#006DDD;--sky:#7FC8FF;--green:#36d399;--violet:#a78bfa;--amber:#fbbf24;--radius:14px;--shadow:0 10px 30px rgba(0,0,0,.45)}
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 50% -10%,#0a1730,transparent),var(--bg);
+    color:var(--ink);font-family:'Inter',system-ui,Segoe UI,Roboto,sans-serif;line-height:1.5;padding:32px 18px 60px}
+  .wrap{max-width:900px;margin:0 auto}
+  h1{font-size:24px;margin:0 0 4px;letter-spacing:-.02em}
+  .sub{color:var(--muted);margin:0 0 20px;font-size:14px}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:740px){.cols{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:var(--shadow)}
+  .card h3{margin:0 0 4px;font-size:15px}
+  .card .tag{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:12px}
+  .short h3{color:var(--sky)}.long h3{color:var(--green)}
+  .msg{font-size:12.5px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:5px 0;background:var(--panel2);transition:.3s}
+  .msg.drop{opacity:.25;text-decoration:line-through}
+  .msg.summ{border-color:var(--amber);background:#1f1a0d;color:var(--amber)}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  button{background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:9px;padding:8px 12px;font-size:12.5px;cursor:pointer}
+  button.on{border-color:var(--sky);box-shadow:0 0 0 1px var(--sky)}
+  .store{font-size:12.5px;border:1px dashed #244a37;border-radius:8px;padding:8px 10px;margin:6px 0;background:#0e2018}
+  .session{font-size:11px;color:var(--muted);margin:10px 0 4px;text-transform:uppercase;letter-spacing:.06em}
+  .recall{background:#0d2547;border:1px solid var(--blue);border-radius:8px;padding:10px;font-size:12.5px;margin-top:8px}
+  .meter{font-size:11px;color:var(--muted);margin-top:10px}
+  .meter b{color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Two Kinds of Memory</h1>
+  <p class="sub">Left: <b style="color:var(--sky)">short-term</b> — managing one conversation's context window. Right: <b style="color:var(--green)">long-term</b> — durable facts that survive into a brand-new session.</p>
+  <div class="cols">
+    <div class="card short">
+      <h3>Short-term (this thread)</h3>
+      <div class="tag">held in state · persisted per-thread</div>
+      <div id="thread"></div>
+      <div class="controls">
+        <button id="full" class="on">Keep all</button>
+        <button id="trim">Trim (last 3)</button>
+        <button id="summarize">Summarize old</button>
+      </div>
+      <div class="meter">tokens sent to model: <b id="tok">—</b> · strategy: <b id="strat">keep all</b></div>
+    </div>
+    <div class="card long">
+      <h3>Long-term (cross-session)</h3>
+      <div class="tag">saved to a store · retrieved on demand</div>
+      <div class="session">Session 1 — today</div>
+      <div class="store">💾 saved memory: <b>user.units = "metric"</b><br>💾 saved memory: <b>user.name = "Kirill"</b></div>
+      <div class="session">Session 2 — next week (new thread, empty history)</div>
+      <div class="msg"><b>Human:</b> What's my name and preferred units?</div>
+      <button id="recallBtn" style="margin-top:8px">🔎 Retrieve from store</button>
+      <div id="recall"></div>
+    </div>
+  </div>
+</div>
+<script>
+  const base=[
+    {r:"System",t:"You are a helpful assistant."},
+    {r:"Human",t:"My name is Kirill, use metric units."},
+    {r:"AI",t:"Got it, Kirill — metric it is."},
+    {r:"Human",t:"How far is the Moon?"},
+    {r:"AI",t:"About 384,400 km on average."},
+    {r:"Human",t:"And in driving time at 100 km/h?"},
+    {r:"AI",t:"Roughly 160 days of nonstop driving."}
+  ];
+  const thread=document.getElementById('thread');
+  function tokens(arr){return arr.reduce((a,m)=>a+Math.ceil(m.t.length/4)+4,0);}
+  function setBtns(id){['full','trim','summarize'].forEach(b=>document.getElementById(b).classList.toggle('on',b===id));}
+  function renderFull(){
+    thread.innerHTML=base.map(m=>'<div class="msg"><b>'+m.r+':</b> '+m.t+'</div>').join('');
+    document.getElementById('tok').textContent=tokens(base);document.getElementById('strat').textContent='keep all';setBtns('full');
+  }
+  function renderTrim(){
+    const keepSys=base[0];const last=base.slice(-3);
+    thread.innerHTML=base.map((m,i)=>{
+      const kept=(i===0)||i>=base.length-3;
+      return '<div class="msg'+(kept?'':' drop')+'"><b>'+m.r+':</b> '+m.t+'</div>';
+    }).join('');
+    document.getElementById('tok').textContent=tokens([keepSys,...last]);document.getElementById('strat').textContent='trim to last 3 (+system)';setBtns('trim');
+  }
+  function renderSumm(){
+    const recent=base.slice(-2);
+    let html='<div class="msg"><b>System:</b> You are a helpful assistant.</div>';
+    html+='<div class="msg summ"><b>Summary:</b> User is Kirill, prefers metric. Discussed Moon distance (~384,400 km).</div>';
+    html+=recent.map(m=>'<div class="msg"><b>'+m.r+':</b> '+m.t+'</div>').join('');
+    thread.innerHTML=html;
+    const approx=[{t:"You are a helpful assistant."},{t:"User is Kirill, prefers metric. Discussed Moon distance."},...recent];
+    document.getElementById('tok').textContent=tokens(approx);document.getElementById('strat').textContent='summarize old + keep recent';setBtns('summarize');
+  }
+  document.getElementById('full').onclick=renderFull;
+  document.getElementById('trim').onclick=renderTrim;
+  document.getElementById('summarize').onclick=renderSumm;
+  document.getElementById('recallBtn').onclick=()=>{
+    document.getElementById('recall').innerHTML='<div class="recall">Retrieved → name=<b>Kirill</b>, units=<b>metric</b><br><b>AI:</b> You\'re Kirill and you prefer metric units. ✅<br><span style="color:var(--muted)">The new thread had no history — the answer came from the long-term store.</span></div>';
+  };
+  renderFull();
+</script>
+</body>
+</html>

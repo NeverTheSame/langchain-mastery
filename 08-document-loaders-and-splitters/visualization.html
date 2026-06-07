@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chunking Playground</title>
+<style>
+  :root{--bg:#030710;--panel:#0c1426;--panel2:#111c33;--ink:#e8eefc;--muted:#8da2c9;
+    --line:#1e2c4a;--blue:#006DDD;--sky:#7FC8FF;--green:#36d399;--violet:#a78bfa;--amber:#fbbf24;--radius:14px;--shadow:0 10px 30px rgba(0,0,0,.45)}
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 50% -10%,#0a1730,transparent),var(--bg);
+    color:var(--ink);font-family:'Inter',system-ui,Segoe UI,Roboto,sans-serif;line-height:1.5;padding:32px 18px 60px}
+  .wrap{max-width:880px;margin:0 auto}
+  h1{font-size:24px;margin:0 0 4px;letter-spacing:-.02em}
+  .sub{color:var(--muted);margin:0 0 22px;font-size:14px}
+  .controls{display:flex;gap:26px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:18px}
+  .ctl{flex:1;min-width:200px}
+  .ctl label{font-size:12px;color:var(--muted);display:flex;justify-content:space-between}
+  .ctl b{color:var(--sky)}
+  input[type=range]{width:100%;margin-top:8px;accent-color:var(--blue)}
+  .doc{font-size:13.5px;line-height:2.0;background:#06101f;border:1px solid var(--line);border-radius:12px;padding:16px;word-spacing:1px}
+  .ch0{background:rgba(0,109,221,.30);border-radius:3px}
+  .ch1{background:rgba(54,211,153,.28);border-radius:3px}
+  .ch2{background:rgba(167,139,250,.30);border-radius:3px}
+  .ch3{background:rgba(251,191,36,.26);border-radius:3px}
+  .ov{outline:2px solid var(--sky);outline-offset:1px;border-radius:3px}
+  .stats{display:flex;gap:18px;margin-top:14px;font-size:13px;color:var(--muted);flex-wrap:wrap}
+  .stats b{color:var(--ink)}
+  .legend{font-size:12px;color:var(--muted);margin-top:10px}
+  .sw{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:middle;margin:0 4px 0 10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Chunking Playground</h1>
+  <p class="sub">Move the sliders and watch the document split into chunks. Each colour is a chunk; the <span style="color:var(--sky)">outlined</span> regions are <b>overlap</b> shared between neighbours.</p>
+
+  <div class="controls">
+    <div class="ctl"><label>chunk_size (words) <b id="csv">14</b></label><input type="range" id="cs" min="6" max="40" value="14"></div>
+    <div class="ctl"><label>chunk_overlap (words) <b id="cov">3</b></label><input type="range" id="ov" min="0" max="12" value="3"></div>
+  </div>
+
+  <div class="doc" id="doc"></div>
+
+  <div class="stats">
+    <span>chunks created: <b id="n">0</b></span>
+    <span>avg words/chunk: <b id="avg">0</b></span>
+    <span>total words: <b id="tot">0</b></span>
+  </div>
+  <p class="legend">Tip: tiny chunks fragment ideas; huge chunks dilute retrieval. Overlap keeps a sentence from being orphaned at a boundary.<span class="sw" style="background:rgba(0,109,221,.5)"></span>chunk A<span class="sw" style="background:rgba(54,211,153,.5)"></span>chunk B<span class="sw ov" style="background:#06101f"></span>overlap</p>
+</div>
+<script>
+  const text="Retrieval augmented generation grounds a language model in your own documents. First you load the raw files and clean them. Then you split the text into chunks small enough to retrieve precisely yet large enough to keep context. Each chunk is embedded into a vector and stored. At query time the most similar chunks are fetched and inserted into the prompt so the model answers from your data instead of guessing.";
+  const words=text.split(' ');
+  const cs=document.getElementById('cs'),ov=document.getElementById('ov'),doc=document.getElementById('doc');
+  function render(){
+    let size=+cs.value, overlap=Math.min(+ov.value,size-1);
+    document.getElementById('csv').textContent=size;
+    document.getElementById('cov').textContent=overlap;
+    // assign each word the set of chunk indices it belongs to
+    const step=size-overlap;
+    const chunks=[];
+    for(let start=0;start<words.length;start+=step){chunks.push([start,Math.min(start+size,words.length)]);if(start+size>=words.length)break;}
+    const owner=words.map(()=>[]);
+    chunks.forEach((c,ci)=>{for(let k=c[0];k<c[1];k++)owner[k].push(ci);});
+    doc.innerHTML=words.map((w,k)=>{
+      const cs_=owner[k];if(cs_.length===0)return w;
+      const overlapped=cs_.length>1;
+      const cls='ch'+(cs_[0]%4)+(overlapped?' ov':'');
+      return '<span class="'+cls+'">'+w+'</span>';
+    }).join(' ');
+    document.getElementById('n').textContent=chunks.length;
+    document.getElementById('tot').textContent=words.length;
+    document.getElementById('avg').textContent=(chunks.reduce((a,c)=>a+(c[1]-c[0]),0)/chunks.length).toFixed(1);
+  }
+  cs.oninput=render;ov.oninput=render;render();
+</script>
+</body>
+</html>

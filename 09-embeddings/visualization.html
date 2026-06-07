@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Embeddings — The Meaning Map</title>
+<style>
+  :root{--bg:#030710;--panel:#0c1426;--panel2:#111c33;--ink:#e8eefc;--muted:#8da2c9;
+    --line:#1e2c4a;--blue:#006DDD;--sky:#7FC8FF;--green:#36d399;--violet:#a78bfa;--amber:#fbbf24;--radius:14px;--shadow:0 10px 30px rgba(0,0,0,.45)}
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 50% -10%,#0a1730,transparent),var(--bg);
+    color:var(--ink);font-family:'Inter',system-ui,Segoe UI,Roboto,sans-serif;line-height:1.5;padding:32px 18px 60px}
+  .wrap{max-width:900px;margin:0 auto}
+  h1{font-size:24px;margin:0 0 4px;letter-spacing:-.02em}
+  .sub{color:var(--muted);margin:0 0 20px;font-size:14px}
+  .layout{display:grid;grid-template-columns:1.3fr 1fr;gap:18px}
+  @media(max-width:740px){.layout{grid-template-columns:1fr}}
+  .mapbox{background:#06101f;border:1px solid var(--line);border-radius:14px;padding:8px;box-shadow:var(--shadow)}
+  svg{width:100%;height:auto;display:block}
+  .docdot{fill:var(--violet)}
+  .docnear{fill:var(--green)}
+  .qdot{fill:var(--sky)}
+  .lbl{font-size:9px;fill:#aebfe0}
+  .ring{fill:none;stroke:var(--sky);stroke-opacity:.4;stroke-dasharray:3 3}
+  .side h3{font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:0 0 8px}
+  .q{display:block;width:100%;text-align:left;background:var(--panel);border:1px solid var(--line);color:var(--ink);
+    border-radius:9px;padding:10px 12px;font-size:13px;cursor:pointer;margin-bottom:8px;transition:.15s}
+  .q:hover{border-color:var(--blue)}.q.on{border-color:var(--sky);box-shadow:0 0 0 1px var(--sky)}
+  .results{margin-top:14px}
+  .res{display:flex;justify-content:space-between;align-items:center;font-size:12.5px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;margin:5px 0;background:var(--panel2)}
+  .bar{height:6px;border-radius:4px;background:var(--green)}
+  .score{color:var(--green);font-family:ui-monospace,monospace;font-size:12px}
+  .barwrap{flex:1;margin:0 10px;background:#0a1424;border-radius:4px;overflow:hidden}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>The Meaning Map</h1>
+  <p class="sub">Each <span style="color:var(--violet)">purple dot</span> is a document, placed by meaning. Pick a query — it drops in as a <span style="color:var(--sky)">blue dot</span> and the nearest documents (highest similarity) light up <span style="color:var(--green)">green</span>. Closeness = relatedness.</p>
+  <div class="layout">
+    <div class="mapbox">
+      <svg viewBox="0 0 400 320" id="svg"></svg>
+    </div>
+    <div class="side">
+      <h3>Choose a query</h3>
+      <div id="queries"></div>
+      <div class="results" id="results"></div>
+    </div>
+  </div>
+</div>
+<script>
+  const docs=[
+    {t:"Account recovery steps",x:80,y:70},
+    {t:"Reset login credentials",x:110,y:95},
+    {t:"Two-factor authentication setup",x:140,y:60},
+    {t:"Pizza dough recipe",x:320,y:250},
+    {t:"Best toppings for pizza",x:350,y:230},
+    {t:"Quarterly revenue report",x:300,y:90},
+    {t:"Tax filing deadlines",x:330,y:120},
+    {t:"How to train a puppy",x:70,y:250},
+    {t:"Dog vaccination schedule",x:100,y:270}
+  ];
+  const queries=[
+    {t:"I forgot my password",x:105,y:80},
+    {t:"What should I put on a pizza?",x:345,y:245},
+    {t:"When are my taxes due?",x:325,y:110},
+    {t:"My new dog needs shots",x:95,y:262}
+  ];
+  const svg=document.getElementById('svg');
+  function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y);}
+  function sim(d){return Math.max(0,1-dist(d,cur)/260);} // pseudo cosine
+  let cur=queries[0];
+  function draw(){
+    const scored=docs.map(d=>({...d,s:sim(d)})).sort((a,b)=>b.s-a.s);
+    const nearSet=new Set(scored.slice(0,3).map(d=>d.t));
+    let s='';
+    // similarity ring
+    s+='<circle class="ring" cx="'+cur.x+'" cy="'+cur.y+'" r="70"/>';
+    docs.forEach(d=>{
+      const near=nearSet.has(d.t);
+      s+='<circle class="'+(near?'docnear':'docdot')+'" cx="'+d.x+'" cy="'+d.y+'" r="'+(near?6:4.5)+'"/>';
+      s+='<text class="lbl" x="'+(d.x+8)+'" y="'+(d.y+3)+'">'+d.t+'</text>';
+    });
+    s+='<circle class="qdot" cx="'+cur.x+'" cy="'+cur.y+'" r="7"/>';
+    s+='<text class="lbl" x="'+(cur.x+9)+'" y="'+(cur.y-7)+'" style="fill:#7FC8FF;font-weight:700">query</text>';
+    svg.innerHTML=s;
+    document.getElementById('results').innerHTML='<h3 style="margin:6px 0 8px">Top matches</h3>'+
+      scored.slice(0,4).map(d=>'<div class="res"><span>'+d.t+'</span><div class="barwrap"><div class="bar" style="width:'+(d.s*100).toFixed(0)+'%"></div></div><span class="score">'+d.s.toFixed(2)+'</span></div>').join('');
+  }
+  const qbox=document.getElementById('queries');
+  queries.forEach((q,i)=>{
+    const b=document.createElement('button');b.className='q'+(i===0?' on':'');b.textContent='“'+q.t+'”';
+    b.onclick=()=>{cur=q;document.querySelectorAll('.q').forEach(x=>x.classList.remove('on'));b.classList.add('on');draw();};
+    qbox.appendChild(b);
+  });
+  draw();
+</script>
+</body>
+</html>

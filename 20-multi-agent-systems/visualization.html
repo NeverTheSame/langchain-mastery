@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Multi-Agent Architectures</title>
+<style>
+  :root{--bg:#030710;--panel:#0c1426;--panel2:#111c33;--ink:#e8eefc;--muted:#8da2c9;
+    --line:#1e2c4a;--blue:#006DDD;--sky:#7FC8FF;--green:#36d399;--violet:#a78bfa;--amber:#fbbf24;--radius:14px;--shadow:0 10px 30px rgba(0,0,0,.45)}
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 50% -10%,#0a1730,transparent),var(--bg);
+    color:var(--ink);font-family:'Inter',system-ui,Segoe UI,Roboto,sans-serif;line-height:1.5;padding:32px 18px 60px}
+  .wrap{max-width:820px;margin:0 auto}
+  h1{font-size:24px;margin:0 0 4px;letter-spacing:-.02em}
+  .sub{color:var(--muted);margin:0 0 16px;font-size:14px}
+  .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  button{background:var(--panel);border:1px solid var(--line);color:var(--ink);border-radius:9px;padding:9px 14px;font-size:13px;cursor:pointer}
+  button.on{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600}
+  .mapbox{background:#06101f;border:1px solid var(--line);border-radius:14px;padding:10px;box-shadow:var(--shadow)}
+  svg{width:100%;height:auto;display:block}
+  .cap{font-size:13px;color:var(--muted);margin-top:12px;min-height:42px}
+  .ctl{display:flex;align-items:center;gap:12px;margin-top:14px;flex-wrap:wrap}
+  label{font-size:12.5px;color:var(--muted)}
+  input[type=range]{accent-color:var(--blue);width:180px;vertical-align:middle}
+  .meter{font-size:13px}.meter b{color:var(--amber)}
+  .run{background:var(--green);color:#04130c;font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Coordinating Specialist Agents</h1>
+  <p class="sub">Same task — “research and write a launch brief” — three ways to coordinate. Press Run to watch work flow between agents via handoffs.</p>
+  <div class="tabs">
+    <button class="on" data-k="sup">Supervisor</button>
+    <button data-k="swarm">Swarm</button>
+    <button data-k="pipe">Pipeline</button>
+  </div>
+  <div class="mapbox"><svg viewBox="0 0 560 250" id="svg"></svg></div>
+  <div class="cap" id="cap"></div>
+  <div class="ctl">
+    <button class="run" id="run">▶ Run task</button>
+    <label>context shared: <input type="range" id="ctx" min="1" max="3" value="2"></label>
+    <span class="meter">est. token cost: <b id="cost">medium</b></span>
+  </div>
+</div>
+<script>
+  const colorOf={SUP:'#7FC8FF',R:'#36d399',W:'#a78bfa',C:'#fbbf24',USER:'#8da2c9'};
+  const archs={
+    sup:{cap:'Supervisor routes the task to each specialist and back. Workers never talk directly — predictable and easy to extend. Most common production pattern.',
+      nodes:{USER:[40,120],SUP:[230,120],R:[420,40],W:[420,120],C:[420,200]},
+      edges:[['USER','SUP'],['SUP','R'],['R','SUP'],['SUP','W'],['W','SUP'],['SUP','C'],['C','SUP']],
+      flow:[['USER','SUP'],['SUP','R'],['R','SUP'],['SUP','W'],['W','SUP']]},
+    swarm:{cap:'Agents hand off directly to whoever they judge should work next — no central boss. Flexible and emergent, but harder to predict and debug.',
+      nodes:{USER:[40,120],R:[210,60],W:[400,60],C:[300,200]},
+      edges:[['USER','R'],['R','W'],['W','C'],['C','R'],['R','C']],
+      flow:[['USER','R'],['R','C'],['C','W']]},
+    pipe:{cap:'A fixed order: research → write → edit. Each agent consumes the previous output. Simple and reliable when the workflow is known.',
+      nodes:{USER:[30,120],R:[180,120],W:[330,120],C:[470,120]},
+      edges:[['USER','R'],['R','W'],['W','C']],
+      flow:[['USER','R'],['R','W'],['W','C']]}
+  };
+  const labels={USER:'task',SUP:'supervisor',R:'researcher',W:'writer',C:'critic'};
+  const svg=document.getElementById('svg'),cap=document.getElementById('cap');
+  let cur='sup';
+  function draw(active){
+    const a=archs[cur];let s='<defs><marker id="m" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#33507e"/></marker><marker id="ma" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#36d399"/></marker></defs>';
+    a.edges.forEach(e=>{
+      const[x1,y1]=a.nodes[e[0]],[x2,y2]=a.nodes[e[1]];
+      const on=active&&active[0]===e[0]&&active[1]===e[1];
+      s+='<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="'+(on?'#36d399':'#33507e')+'" stroke-width="'+(on?'3':'1.6')+'" marker-end="url(#'+(on?'ma':'m')+')"/>';
+    });
+    Object.entries(a.nodes).forEach(([k,[x,y]])=>{
+      const lit=active&&(active[1]===k);
+      s+='<circle cx="'+x+'" cy="'+y+'" r="30" fill="'+(lit?'#0e2018':'#0c1426')+'" stroke="'+(lit?'#36d399':colorOf[k])+'" stroke-width="'+(lit?'3':'1.8')+'"/>';
+      s+='<text x="'+x+'" y="'+(y+4)+'" fill="#e8eefc" font-size="10.5" text-anchor="middle">'+labels[k]+'</text>';
+    });
+    svg.innerHTML=s;
+  }
+  function run(){
+    const flow=archs[cur].flow;let i=0;
+    (function tick(){if(i>=flow.length){draw();return;}draw(flow[i]);i++;setTimeout(tick,800);})();
+  }
+  document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
+    document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
+    cur=b.dataset.k;cap.textContent=archs[cur].cap;draw();
+  });
+  document.getElementById('run').onclick=run;
+  document.getElementById('ctx').oninput=e=>{
+    const v=+e.target.value;document.getElementById('cost').textContent=['low (summaries only)','medium (scoped state)','high (full history)'][v-1];
+  };
+  cap.textContent=archs.sup.cap;draw();
+</script>
+</body>
+</html>

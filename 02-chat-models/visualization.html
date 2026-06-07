@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chat Models — One Interface, Many Providers</title>
+<style>
+  :root{--bg:#030710;--panel:#0c1426;--panel2:#111c33;--ink:#e8eefc;--muted:#8da2c9;
+    --line:#1e2c4a;--blue:#006DDD;--sky:#7FC8FF;--green:#36d399;--violet:#a78bfa;--amber:#fbbf24;--radius:14px;--shadow:0 10px 30px rgba(0,0,0,.45)}
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 50% -10%,#0a1730,transparent),var(--bg);
+    color:var(--ink);font-family:'Inter',system-ui,Segoe UI,Roboto,sans-serif;line-height:1.55;padding:32px 18px 60px}
+  .wrap{max-width:960px;margin:0 auto}
+  h1{font-size:25px;margin:0 0 4px;letter-spacing:-.02em}
+  .sub{color:var(--muted);margin:0 0 24px;font-size:14px}
+  .stage{display:grid;grid-template-columns:1fr 1.1fr 1fr;gap:16px;align-items:center}
+  @media(max-width:760px){.stage{grid-template-columns:1fr}}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow)}
+  .box h3{margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+  .msg{font-size:13px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px;margin:6px 0}
+  .role{color:var(--sky);font-weight:600;font-size:11px;text-transform:uppercase}
+  .hub{text-align:center}
+  .iface{background:linear-gradient(90deg,#0d2547,#10325f);border:1px solid var(--blue);border-radius:var(--radius);
+    padding:14px;font-weight:600;text-align:center}
+  .iface code{color:var(--sky);font-size:12px;display:block;margin-top:6px;font-weight:400}
+  .providers{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+  .prov{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);
+    border-radius:10px;padding:10px 12px;cursor:pointer;transition:.18s;font-size:13px}
+  .prov:hover{transform:translateX(3px);border-color:var(--blue)}
+  .prov.active{border-color:var(--sky);box-shadow:0 0 0 1px var(--sky)}
+  .swatch{width:12px;height:12px;border-radius:3px;flex:0 0 auto}
+  .out .msg{border-color:#244a37}
+  .meta{font-size:11px;color:var(--muted);margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:4px}
+  .meta b{color:var(--green)}
+  .hint{font-size:12px;color:var(--muted);margin-top:16px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>One Interface, Many Providers</h1>
+  <p class="sub">The same message goes in; LangChain routes it to whichever provider you picked and returns a standardized <code>AIMessage</code>. Click a provider to switch — notice the call code never changes.</p>
+
+  <div class="stage">
+    <div class="box">
+      <h3>Input — messages</h3>
+      <div class="msg"><span class="role">System</span><br>You are concise.</div>
+      <div class="msg"><span class="role">Human</span><br>Explain embeddings in one sentence.</div>
+    </div>
+
+    <div class="hub">
+      <div class="iface">BaseChatModel<code>model.invoke(messages)</code></div>
+      <div class="providers" id="provs"></div>
+    </div>
+
+    <div class="box out">
+      <h3>Output — AIMessage</h3>
+      <div class="msg" id="answer"><span class="role" id="ansrole">AI · OpenAI</span><br><span id="anstext">Pick a provider →</span></div>
+      <div class="meta">
+        <span>provider: <b id="m-prov">—</b></span>
+        <span>tokens: <b id="m-tok">—</b></span>
+        <span>.content: <b>str</b></span>
+        <span>.tool_calls: <b>[]</b></span>
+      </div>
+    </div>
+  </div>
+  <p class="hint">Same input, same method, same output shape — only <code style="color:var(--sky)">model_provider</code> changed.</p>
+</div>
+
+<script>
+  const provs=[
+    {k:"openai",name:"OpenAI · gpt-4o-mini",color:"#10a37f",tok:"in 18 / out 21",
+     ans:"Embeddings turn text into vectors of numbers so that similar meanings sit close together in space."},
+    {k:"anthropic",name:"Anthropic · Claude",color:"#d97757",tok:"in 17 / out 24",
+     ans:"An embedding is a numeric vector capturing a piece of text's meaning, letting machines measure semantic closeness."},
+    {k:"google",name:"Google · Gemini",color:"#4285f4",tok:"in 18 / out 19",
+     ans:"Embeddings map words or sentences into a coordinate space where distance reflects how related they are."},
+    {k:"local",name:"Local · Llama (Ollama)",color:"#a78bfa",tok:"in 18 / out 20",
+     ans:"They convert text into fixed-length number lists whose geometry encodes semantic similarity."}
+  ];
+  const box=document.getElementById('provs');
+  provs.forEach((p,i)=>{
+    const el=document.createElement('div');el.className='prov'+(i===0?' active':'');
+    el.innerHTML='<span class="swatch" style="background:'+p.color+'"></span>'+p.name;
+    el.onclick=()=>{document.querySelectorAll('.prov').forEach(x=>x.classList.remove('active'));el.classList.add('active');render(p);};
+    box.appendChild(el);
+  });
+  function render(p){
+    document.getElementById('ansrole').textContent='AI · '+p.name.split(' · ')[0];
+    document.getElementById('anstext').textContent=p.ans;
+    document.getElementById('m-prov').textContent=p.name.split(' · ')[0];
+    document.getElementById('m-tok').textContent=p.tok;
+  }
+  render(provs[0]);
+</script>
+</body>
+</html>

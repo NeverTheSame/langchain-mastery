@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nodes, Edges & Control Flow</title>
+<style>
+  :root{--bg:#030710;--panel:#0c1426;--panel2:#111c33;--ink:#e8eefc;--muted:#8da2c9;
+    --line:#1e2c4a;--blue:#006DDD;--sky:#7FC8FF;--green:#36d399;--violet:#a78bfa;--amber:#fbbf24;--radius:14px;--shadow:0 10px 30px rgba(0,0,0,.45)}
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 50% -10%,#0a1730,transparent),var(--bg);
+    color:var(--ink);font-family:'Inter',system-ui,Segoe UI,Roboto,sans-serif;line-height:1.5;padding:32px 18px 60px}
+  .wrap{max-width:820px;margin:0 auto}
+  h1{font-size:24px;margin:0 0 4px;letter-spacing:-.02em}
+  .sub{color:var(--muted);margin:0 0 18px;font-size:14px}
+  .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  button{background:var(--panel);border:1px solid var(--line);color:var(--ink);border-radius:9px;padding:9px 13px;font-size:12.5px;cursor:pointer}
+  button.on{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600}
+  .mapbox{background:#06101f;border:1px solid var(--line);border-radius:14px;padding:10px;box-shadow:var(--shadow)}
+  svg{width:100%;height:auto;display:block}
+  .legend{display:flex;gap:16px;margin-top:10px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+  .legend i{width:22px;height:0;border-top:2px solid;display:inline-block;vertical-align:middle;margin-right:5px}
+  .cap{font-size:13px;color:var(--muted);margin-top:12px;min-height:42px}
+  .run{margin-top:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Graph Topologies</h1>
+  <p class="sub">The same primitives — nodes + normal edges + conditional edges — compose into every pattern. Pick a topology, then press “Run” to watch execution flow super-step by super-step.</p>
+  <div class="tabs">
+    <button class="on" data-k="linear">Linear pipeline</button>
+    <button data-k="branch">Branch / router</button>
+    <button data-k="agent">Agent loop</button>
+    <button data-k="map">Map-reduce (Send)</button>
+  </div>
+  <div class="mapbox"><svg viewBox="0 0 560 240" id="svg"></svg></div>
+  <div class="legend"><span><i style="border-color:#006DDD"></i>normal edge</span><span><i style="border-color:#fbbf24;border-top-style:dashed"></i>conditional edge</span><span><i style="border-color:#36d399"></i>active flow</span></div>
+  <div class="run"><button id="run" style="background:var(--blue);color:#fff;border:0;font-weight:600">▶ Run</button></div>
+  <div class="cap" id="cap"></div>
+</div>
+<script>
+  const NS='http://www.w3.org/2000/svg';
+  const topos={
+    linear:{cap:'A → B → C → END. Fixed normal edges, one path. So simple that LCEL is often enough.',
+      nodes:{START:[30,100],A:[150,100],B:[280,100],C:[410,100],END:[510,100]},
+      edges:[['START','A','n'],['A','B','n'],['B','C','n'],['C','END','n']],
+      flow:['START','A','B','C','END']},
+    branch:{cap:'A classifier sets a state field; a conditional edge routes to ONE handler. Branching lives in the edge.',
+      nodes:{START:[30,110],CLS:[150,110],H1:[320,40],H2:[320,110],H3:[320,180],END:[490,110]},
+      edges:[['START','CLS','n'],['CLS','H1','c'],['CLS','H2','c'],['CLS','H3','c'],['H1','END','n'],['H2','END','n'],['H3','END','n']],
+      flow:['START','CLS','H2','END']},
+    agent:{cap:'model ⇄ tools with a conditional edge: loop back if a tool was called, else END. This IS create_agent.',
+      nodes:{START:[30,110],MODEL:[180,110],TOOLS:[180,30],END:[420,110]},
+      edges:[['START','MODEL','n'],['MODEL','TOOLS','c'],['TOOLS','MODEL','n'],['MODEL','END','c']],
+      flow:['START','MODEL','TOOLS','MODEL','END']},
+    map:{cap:'A conditional edge returns Send() per item → N workers run in parallel → aggregator fans them in.',
+      nodes:{START:[30,110],SPLIT:[150,110],W1:[320,40],W2:[320,110],W3:[320,180],AGG:[460,110]},
+      edges:[['START','SPLIT','n'],['SPLIT','W1','c'],['SPLIT','W2','c'],['SPLIT','W3','c'],['W1','AGG','n'],['W2','AGG','n'],['W3','AGG','n']],
+      flow:['START','SPLIT',['W1','W2','W3'],'AGG']}
+  };
+  const svg=document.getElementById('svg'),cap=document.getElementById('cap');
+  let cur='linear';
+  const colorOf={START:'#36d399',END:'#a78bfa',MODEL:'#7FC8FF',CLS:'#7FC8FF',SPLIT:'#7FC8FF',AGG:'#7FC8FF',TOOLS:'#fbbf24'};
+  function draw(active=[]){
+    const t=topos[cur];let s='<defs><marker id="a" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#006DDD"/></marker><marker id="ac" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#fbbf24"/></marker></defs>';
+    t.edges.forEach(e=>{
+      const[a,b,type]=e;const[x1,y1]=t.nodes[a],[x2,y2]=t.nodes[b];
+      const col=type==='c'?'#fbbf24':'#006DDD';const dash=type==='c'?'stroke-dasharray="5 4"':'';
+      s+='<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="'+col+'" stroke-width="2" '+dash+' marker-end="url(#'+(type==='c'?'ac':'a')+')"/>';
+    });
+    Object.entries(t.nodes).forEach(([k,[x,y]])=>{
+      const on=active.includes(k);const col=colorOf[k]||'#7FC8FF';
+      s+='<circle cx="'+x+'" cy="'+y+'" r="26" fill="'+(on?'#0e2018':'#0c1426')+'" stroke="'+(on?'#36d399':col)+'" stroke-width="'+(on?'3':'1.6')+'"/>';
+      s+='<text x="'+x+'" y="'+(y+4)+'" fill="#e8eefc" font-size="11" text-anchor="middle">'+k+'</text>';
+    });
+    svg.innerHTML=s;
+  }
+  function run(){
+    const flow=topos[cur].flow;let i=0;
+    function tick(){if(i>=flow.length){return;}const a=flow[i];draw(Array.isArray(a)?a:[a]);i++;setTimeout(tick,750);}
+    tick();
+  }
+  document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
+    document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
+    cur=b.dataset.k;cap.textContent=topos[cur].cap;draw();
+  });
+  document.getElementById('run').onclick=run;
+  cap.textContent=topos.linear.cap;draw();
+</script>
+</body>
+</html>

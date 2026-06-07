@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Structured Output — Text to Validated Object</title>
+<style>
+  :root{--bg:#030710;--panel:#0c1426;--panel2:#111c33;--ink:#e8eefc;--muted:#8da2c9;
+    --line:#1e2c4a;--blue:#006DDD;--sky:#7FC8FF;--green:#36d399;--red:#f87171;--violet:#a78bfa;--amber:#fbbf24;--radius:14px;--shadow:0 10px 30px rgba(0,0,0,.45)}
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 50% -10%,#0a1730,transparent),var(--bg);
+    color:var(--ink);font-family:'Inter',system-ui,Segoe UI,Roboto,sans-serif;line-height:1.5;padding:32px 18px 60px}
+  .wrap{max-width:900px;margin:0 auto}
+  h1{font-size:24px;margin:0 0 4px;letter-spacing:-.02em}
+  .sub{color:var(--muted);margin:0 0 22px;font-size:14px}
+  .row{display:grid;grid-template-columns:1fr 44px 1fr;gap:14px;align-items:center}
+  @media(max-width:720px){.row{grid-template-columns:1fr}.mid{transform:rotate(90deg)}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow)}
+  .card h3{margin:0 0 10px;font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+  .mid{text-align:center;font-size:26px;color:var(--blue);font-weight:800}
+  .raw{font-size:13px;color:#cdd9f1;font-style:italic;background:var(--panel2);border:1px dashed var(--line);border-radius:10px;padding:12px}
+  .schema{font-family:ui-monospace,monospace;font-size:12px;color:#cbd9f3;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px;white-space:pre;line-height:1.6}
+  .obj{font-family:ui-monospace,monospace;font-size:13px;line-height:1.8}
+  .k{color:var(--sky)}.v{color:var(--green)}.bad{color:var(--red)}
+  .field{display:flex;justify-content:space-between;padding:8px 10px;border:1px solid var(--line);border-radius:9px;margin:6px 0;background:var(--panel2)}
+  .ok-badge{font-size:11px;color:var(--green)}.bad-badge{font-size:11px;color:var(--red)}
+  .toggle{display:flex;gap:8px;margin:18px 0 6px}
+  button{background:var(--panel);border:1px solid var(--line);color:var(--ink);border-radius:9px;padding:9px 14px;font-size:13px;cursor:pointer}
+  button.on{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600}
+  .status{margin-top:14px;font-size:13px;padding:10px 12px;border-radius:10px}
+  .status.good{background:#0e2018;border:1px solid #244a37;color:var(--green)}
+  .status.fail{background:#241313;border:1px solid #4a2424;color:var(--red)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>From Messy Text to Validated Object</h1>
+  <p class="sub">A schema squeezes free-form text into typed fields — and rejects anything that doesn't fit. Toggle the input to see validation succeed or fail.</p>
+
+  <div class="toggle">
+    <button class="on" id="b-good">Clean input</button>
+    <button id="b-bad">Ambiguous input (validation fails)</button>
+  </div>
+
+  <div class="row">
+    <div class="card">
+      <h3>1 · Raw model input</h3>
+      <div class="raw" id="raw">Bill to Jane Doe, jane@x.com, total $412.50</div>
+      <h3 style="margin-top:14px">2 · Pydantic schema</h3>
+      <div class="schema">class Invoice(BaseModel):
+    name:   str
+    email:  str
+    amount: float  # must parse</div>
+    </div>
+    <div class="mid">⇒</div>
+    <div class="card">
+      <h3>3 · with_structured_output → object</h3>
+      <div id="result"></div>
+      <div class="status" id="status"></div>
+    </div>
+  </div>
+</div>
+<script>
+  const good={raw:"Bill to Jane Doe, jane@x.com, total $412.50",
+    fields:[["name","Jane Doe",true],["email","jane@x.com",true],["amount","412.5",true]],ok:true};
+  const bad={raw:"Charge the usual client the usual amount, you know the one",
+    fields:[["name","?? (no name present)",false],["email","?? (missing)",false],["amount","\"a lot\" → float()",false]],ok:false};
+  const result=document.getElementById('status'),box=document.getElementById('result'),raw=document.getElementById('raw');
+  function render(d){
+    raw.textContent=d.raw;
+    box.innerHTML=d.fields.map(f=>'<div class="field"><span><span class="k">'+f[0]+'</span> = <span class="'+(f[2]?'v':'bad')+'">'+f[1]+'</span></span><span class="'+(f[2]?'ok-badge':'bad-badge')+'">'+(f[2]?'✓ valid':'✕ invalid')+'</span></div>').join('');
+    if(d.ok){result.className='status good';result.textContent='✓ Returns Invoice(name="Jane Doe", email="jane@x.com", amount=412.5) — a real, typed object your code can use.';}
+    else{result.className='status fail';result.textContent='✕ ValidationError: amount could not be coerced to float; required fields missing. The error stops bad data BEFORE it reaches your database.';}
+  }
+  const bg=document.getElementById('b-good'),bb=document.getElementById('b-bad');
+  bg.onclick=()=>{bg.classList.add('on');bb.classList.remove('on');render(good);};
+  bb.onclick=()=>{bb.classList.add('on');bg.classList.remove('on');render(bad);};
+  render(good);
+</script>
+</body>
+</html>

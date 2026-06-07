@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Evaluation Dashboard</title>
+<style>
+  :root{--bg:#030710;--panel:#0c1426;--panel2:#111c33;--ink:#e8eefc;--muted:#8da2c9;
+    --line:#1e2c4a;--blue:#006DDD;--sky:#7FC8FF;--green:#36d399;--violet:#a78bfa;--amber:#fbbf24;--red:#f87171;--radius:14px;--shadow:0 10px 30px rgba(0,0,0,.45)}
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 50% -10%,#0a1730,transparent),var(--bg);
+    color:var(--ink);font-family:'Inter',system-ui,Segoe UI,Roboto,sans-serif;line-height:1.5;padding:32px 18px 60px}
+  .wrap{max-width:880px;margin:0 auto}
+  h1{font-size:24px;margin:0 0 4px;letter-spacing:-.02em}
+  .sub{color:var(--muted);margin:0 0 16px;font-size:14px}
+  .controls{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+  button{border:0;border-radius:10px;padding:10px 16px;font-size:14px;cursor:pointer;font-weight:600}
+  .vA{background:var(--panel);border:1px solid var(--line);color:var(--ink)}
+  .vB{background:var(--blue);color:#fff}
+  .reset{background:var(--panel);border:1px solid var(--line);color:var(--ink);font-weight:400}
+  table{width:100%;border-collapse:collapse;font-size:13px;background:#06101f;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  th,td{padding:9px 11px;text-align:left;border-bottom:1px solid var(--line)}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+  .q{color:var(--ink)}
+  .score{font-family:ui-monospace,monospace;font-weight:600}
+  .s-hi{color:var(--green)}.s-mid{color:var(--amber)}.s-lo{color:var(--red)}
+  .pending{color:var(--muted)}
+  .summary{display:flex;gap:14px;margin-top:16px;flex-wrap:wrap}
+  .card{flex:1;min-width:150px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;text-align:center}
+  .card .big{font-size:26px;font-weight:700}
+  .verdict{margin-top:14px;font-size:14px;padding:12px;border-radius:10px;display:none}
+  .verdict.win{background:#0e2018;border:1px solid #244a37;color:var(--green)}
+  .verdict.lose{background:#241313;border:1px solid #4a2424;color:var(--red)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Eval Dashboard — Did the Change Help?</h1>
+  <p class="sub">Run two versions of a RAG app against the same dataset. Watch per-example correctness + faithfulness populate, then read the aggregate verdict. Numbers, not vibes.</p>
+  <div class="controls">
+    <button class="vA" id="runA">▶ Run v1 (baseline)</button>
+    <button class="vB" id="runB">▶ Run v2 (added re-ranker)</button>
+    <button class="reset" id="reset">Reset</button>
+  </div>
+  <table>
+    <thead><tr><th>#</th><th>Question (dataset example)</th><th>Correctness</th><th>Faithfulness</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <div class="summary">
+    <div class="card"><div style="font-size:12px;color:var(--muted)">avg correctness</div><div class="big" id="avgC">—</div></div>
+    <div class="card"><div style="font-size:12px;color:var(--muted)">avg faithfulness</div><div class="big" id="avgF">—</div></div>
+    <div class="card"><div style="font-size:12px;color:var(--muted)">version</div><div class="big" id="ver">—</div></div>
+  </div>
+  <div class="verdict" id="verdict"></div>
+</div>
+<script>
+  const data=[
+    {q:"How do I reset my password?"},
+    {q:"What's the refund window?"},
+    {q:"Compare Pro vs Enterprise limits"},
+    {q:"Is SSO supported on the Free plan?"},
+    {q:"Steps to export my data"}
+  ];
+  const scores={
+    A:[[0.9,0.85],[0.6,0.7],[0.4,0.55],[0.5,0.5],[0.8,0.75]],
+    B:[[0.95,0.95],[0.85,0.9],[0.8,0.85],[0.7,0.8],[0.9,0.92]]
+  };
+  const rows=document.getElementById('rows');
+  function cls(v){return v>=0.8?'s-hi':v>=0.6?'s-mid':'s-lo';}
+  function init(){rows.innerHTML=data.map((d,i)=>'<tr><td>'+(i+1)+'</td><td class="q">'+d.q+'</td><td class="score pending" id="c'+i+'">—</td><td class="score pending" id="f'+i+'">—</td></tr>').join('');
+    document.getElementById('avgC').textContent='—';document.getElementById('avgF').textContent='—';document.getElementById('ver').textContent='—';document.getElementById('verdict').style.display='none';}
+  let lastAvgC=null;
+  function run(v){
+    init();let i=0;const s=scores[v];
+    (function tick(){
+      if(i>=data.length){finish(v,s);return;}
+      const[c,f]=s[i];
+      document.getElementById('c'+i).outerHTML='<td class="score '+cls(c)+'" id="c'+i+'">'+c.toFixed(2)+'</td>';
+      document.getElementById('f'+i).outerHTML='<td class="score '+cls(f)+'" id="f'+i+'">'+f.toFixed(2)+'</td>';
+      i++;setTimeout(tick,360);
+    })();
+  }
+  function finish(v,s){
+    const avgC=s.reduce((a,x)=>a+x[0],0)/s.length, avgF=s.reduce((a,x)=>a+x[1],0)/s.length;
+    document.getElementById('avgC').textContent=avgC.toFixed(2);
+    document.getElementById('avgF').textContent=avgF.toFixed(2);
+    document.getElementById('ver').textContent=v==='A'?'v1':'v2';
+    const vd=document.getElementById('verdict');
+    if(v==='B'&&lastAvgC!=null){
+      const delta=(avgC-lastAvgC);
+      vd.style.display='block';
+      if(delta>0){vd.className='verdict win';vd.innerHTML='✅ v2 improved avg correctness by +'+(delta).toFixed(2)+' across the dataset — ship it. (Run v1 first, then v2, to compare.)';}
+      else{vd.className='verdict lose';vd.textContent='⚠️ v2 did not beat v1 — investigate before shipping.';}
+    }
+    if(v==='A')lastAvgC=avgC;
+  }
+  document.getElementById('runA').onclick=()=>run('A');
+  document.getElementById('runB').onclick=()=>run('B');
+  document.getElementById('reset').onclick=()=>{lastAvgC=null;init();};
+  init();
+</script>
+</body>
+</html>

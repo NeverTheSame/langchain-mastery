@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAG — End to End</title>
+<style>
+  :root{--bg:#030710;--panel:#0c1426;--panel2:#111c33;--ink:#e8eefc;--muted:#8da2c9;
+    --line:#1e2c4a;--blue:#006DDD;--sky:#7FC8FF;--green:#36d399;--violet:#a78bfa;--amber:#fbbf24;--radius:14px;--shadow:0 10px 30px rgba(0,0,0,.45)}
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 50% -10%,#0a1730,transparent),var(--bg);
+    color:var(--ink);font-family:'Inter',system-ui,Segoe UI,Roboto,sans-serif;line-height:1.5;padding:32px 18px 60px}
+  .wrap{max-width:880px;margin:0 auto}
+  h1{font-size:24px;margin:0 0 4px;letter-spacing:-.02em}
+  .sub{color:var(--muted);margin:0 0 20px;font-size:14px}
+  .flow{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:8px}
+  @media(max-width:720px){.flow{grid-template-columns:1fr 1fr}}
+  .node{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:12px;text-align:center;transition:.3s;font-size:12px}
+  .node.lit{border-color:var(--sky);box-shadow:0 0 0 1px var(--sky),0 0 18px rgba(127,200,255,.2)}
+  .node .ic{font-size:20px}.node .t{font-weight:600;margin-top:4px}.node .s{color:var(--muted);font-size:10.5px;margin-top:2px}
+  .panel{background:#06101f;border:1px solid var(--line);border-radius:12px;padding:16px;margin-top:14px;min-height:150px}
+  .chunk{font-size:12.5px;border:1px solid var(--line);border-radius:8px;padding:9px 11px;margin:6px 0;background:var(--panel2);display:flex;justify-content:space-between;gap:10px;opacity:.5;transition:.3s}
+  .chunk.keep{opacity:1;border-color:var(--green)}
+  .chunk .sc{font-family:ui-monospace,monospace;color:var(--green);font-size:11.5px}
+  .chunk .meta{color:var(--muted);font-size:10.5px}
+  .answer{font-size:14px;line-height:1.7}
+  .cite{color:var(--sky);font-size:11px;background:#102a4d;border-radius:5px;padding:1px 6px;font-family:ui-monospace,monospace}
+  .controls{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
+  button{background:var(--blue);color:#fff;border:0;border-radius:10px;padding:10px 16px;font-size:14px;cursor:pointer;font-weight:600}
+  button.ghost{background:var(--panel);border:1px solid var(--line);color:var(--ink)}
+  .q{font-size:14px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-bottom:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>RAG, End to End</h1>
+  <p class="sub">Watch a question flow through the full pipeline: retrieve wide → re-rank narrow → assemble a grounded prompt → generate a cited answer.</p>
+  <div class="q">❓ <b>User:</b> “How do I reset my password if I lost access to my 2FA device?”</div>
+  <div class="flow">
+    <div class="node" id="n0"><div class="ic">📥</div><div class="t">Index</div><div class="s">load·split·embed·store</div></div>
+    <div class="node" id="n1"><div class="ic">🔎</div><div class="t">Retrieve</div><div class="s">top-k by similarity</div></div>
+    <div class="node" id="n2"><div class="ic">⚖️</div><div class="t">Re-rank</div><div class="s">cross-encoder</div></div>
+    <div class="node" id="n3"><div class="ic">🧩</div><div class="t">Assemble</div><div class="s">context + question</div></div>
+    <div class="node" id="n4"><div class="ic">🧠</div><div class="t">Generate</div><div class="s">grounded + cited</div></div>
+  </div>
+  <div class="panel" id="panel"><span style="color:var(--muted);font-size:13px">Press “Run RAG” to begin.</span></div>
+  <div class="controls"><button id="run">▶ Run RAG</button><button class="ghost" id="reset">Reset</button></div>
+</div>
+<script>
+  const chunks=[
+    {t:"Account recovery: if you lost your 2FA device, use a backup code or contact support to verify identity.",sc:0.91,meta:"security.md · p2",keep:true},
+    {t:"To change your password while logged in, go to Settings → Security → Change password.",sc:0.74,meta:"settings.md · p5",keep:true},
+    {t:"Two-factor authentication adds a second step at login using an authenticator app.",sc:0.68,meta:"2fa.md · p1",keep:true},
+    {t:"Our pricing tiers include Free, Pro and Enterprise with annual discounts.",sc:0.21,meta:"pricing.md · p3",keep:false},
+    {t:"The mobile app supports dark mode and offline reading.",sc:0.12,meta:"app.md · p9",keep:false}
+  ];
+  const panel=document.getElementById('panel');let timers=[];
+  function lit(id){['n0','n1','n2','n3','n4'].forEach(n=>document.getElementById(n).classList.remove('lit'));if(id)document.getElementById(id).classList.add('lit');}
+  function step(fn,d){timers.push(setTimeout(fn,d));}
+  function run(){
+    reset();
+    step(()=>{lit('n0');panel.innerHTML='<div style="font-size:13px;color:var(--muted)">Knowledge base already indexed: documents loaded, split into chunks, embedded, and stored as vectors.</div>';},100);
+    step(()=>{lit('n1');panel.innerHTML='<div style="font-size:12px;color:var(--muted);margin-bottom:6px">Retrieved top-5 candidates by vector similarity:</div>'+
+      chunks.map(c=>'<div class="chunk keep"><span>'+c.t+'</span><span class="sc">'+c.sc.toFixed(2)+'</span></div>').join('');},1100);
+    step(()=>{lit('n2');panel.innerHTML='<div style="font-size:12px;color:var(--muted);margin-bottom:6px">Re-ranked; kept only the truly relevant chunks (others dimmed out):</div>'+
+      chunks.map(c=>'<div class="chunk '+(c.keep?'keep':'')+'"><span>'+c.t+'</span><span class="meta">'+c.meta+'</span></div>').join('');},2300);
+    step(()=>{lit('n3');panel.innerHTML='<div style="font-size:12.5px;font-family:ui-monospace,monospace;color:#cbd9f3;white-space:pre-wrap;line-height:1.7">SYSTEM: Answer ONLY from the context. Cite sources. If unknown, say so.\n\nCONTEXT:\n[1] security.md p2 — backup code / contact support\n[2] settings.md p5 — change password in Settings\n\nQUESTION: How do I reset my password if I lost my 2FA device?</div>';},3500);
+    step(()=>{lit('n4');panel.innerHTML='<div class="answer">If you\'ve lost access to your 2FA device, use a <b>backup code</b> to sign in, or <b>contact support</b> to verify your identity <span class="cite">[1]</span>. Once logged in, change your password under <b>Settings → Security → Change password</b> <span class="cite">[2]</span>.<br><br><span style="color:var(--muted);font-size:12px">Every claim is grounded in a retrieved chunk — no hallucination.</span></div>';},4700);
+  }
+  function reset(){timers.forEach(clearTimeout);timers=[];lit(null);panel.innerHTML='<span style="color:var(--muted);font-size:13px">Press “Run RAG” to begin.</span>';}
+  document.getElementById('run').onclick=run;
+  document.getElementById('reset').onclick=reset;
+</script>
+</body>
+</html>

@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LangChain Ecosystem — Interactive Map</title>
+<style>
+  :root{
+    --bg:#030710; --panel:#0c1426; --panel2:#111c33; --ink:#e8eefc; --muted:#8da2c9;
+    --line:#1e2c4a; --blue:#006DDD; --sky:#7FC8FF; --green:#36d399; --violet:#a78bfa; --amber:#fbbf24;
+    --radius:14px; --shadow:0 10px 30px rgba(0,0,0,.45);
+    font-synthesis:none;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 50% -10%,#0a1730,transparent),var(--bg);
+    color:var(--ink);font-family:'Inter',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    line-height:1.55;padding:32px 18px 60px}
+  .wrap{max-width:980px;margin:0 auto}
+  h1{font-size:26px;margin:0 0 4px;letter-spacing:-.02em}
+  .sub{color:var(--muted);margin:0 0 26px;font-size:14px}
+  .agent{background:linear-gradient(90deg,#0d2547,#10325f);border:1px solid var(--line);
+    border-radius:var(--radius);padding:16px 20px;text-align:center;font-weight:600;margin-bottom:8px;
+    box-shadow:var(--shadow)}
+  .agent small{display:block;font-weight:400;color:var(--sky);font-size:12px;margin-top:3px}
+  .connectors{display:flex;justify-content:space-around;height:26px;margin:0 8%}
+  .connectors span{width:2px;background:linear-gradient(var(--line),var(--blue))}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  @media(max-width:720px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:18px;cursor:pointer;transition:.2s;position:relative;overflow:hidden}
+  .card:hover{transform:translateY(-3px);border-color:var(--blue)}
+  .card.active{border-color:var(--sky);box-shadow:0 0 0 1px var(--sky),var(--shadow)}
+  .tag{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+  .card h2{font-size:18px;margin:6px 0 6px}
+  .card p{font-size:13px;color:var(--muted);margin:0}
+  .dot{position:absolute;top:16px;right:16px;width:10px;height:10px;border-radius:50%}
+  .c-blue .dot,.c-blue h2{color:var(--sky)} .c-blue .dot{background:var(--sky)}
+  .c-violet .dot,.c-violet h2{color:var(--violet)} .c-violet .dot{background:var(--violet)}
+  .c-green .dot,.c-green h2{color:var(--green)} .c-green .dot{background:var(--green)}
+  .detail{margin-top:18px;background:var(--panel2);border:1px solid var(--line);
+    border-radius:var(--radius);padding:20px;min-height:120px}
+  .detail h3{margin:0 0 8px;font-size:16px}
+  .detail ul{margin:8px 0 0;padding-left:18px;color:var(--muted);font-size:13.5px}
+  .detail li{margin:4px 0}
+  .flow{margin-top:26px}
+  .flow h3{font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin:0 0 12px}
+  .pipe{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .step{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:12.5px}
+  .arrow{color:var(--blue);font-weight:700}
+  .legend{font-size:12px;color:var(--muted);margin-top:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>The LangChain Ecosystem</h1>
+  <p class="sub">Click a product to explore what it provides. One stack, three layers — from building blocks to production.</p>
+
+  <div class="agent">YOUR AGENT <small>the application you are building</small></div>
+  <div class="connectors"><span></span><span></span><span></span></div>
+
+  <div class="grid">
+    <div class="card c-blue" data-key="lc">
+      <span class="dot"></span><div class="tag">open source · library</div>
+      <h2>LangChain</h2><p>The standard building blocks for LLM apps.</p>
+    </div>
+    <div class="card c-violet" data-key="lg">
+      <span class="dot"></span><div class="tag">open source · framework</div>
+      <h2>LangGraph</h2><p>Stateful orchestration for agents.</p>
+    </div>
+    <div class="card c-green" data-key="ls">
+      <span class="dot"></span><div class="tag">platform · commercial</div>
+      <h2>LangSmith</h2><p>Observability, evals & deployment.</p>
+    </div>
+  </div>
+
+  <div class="detail" id="detail">
+    <h3>Pick a layer above ☝️</h3>
+    <p style="color:var(--muted);font-size:13.5px;margin:0">Each product is useful on its own, but they're designed to reinforce one another. LangChain's high-level agent is built on LangGraph; LangSmith can trace either automatically.</p>
+  </div>
+
+  <div class="flow">
+    <h3>How a request flows through the stack</h3>
+    <div class="pipe">
+      <span class="step">User input</span><span class="arrow">→</span>
+      <span class="step">Prompt template <em>(LangChain)</em></span><span class="arrow">→</span>
+      <span class="step">Chat model <em>(LangChain)</em></span><span class="arrow">→</span>
+      <span class="step">Tool call / branch <em>(LangGraph)</em></span><span class="arrow">→</span>
+      <span class="step">State update <em>(LangGraph)</em></span><span class="arrow">→</span>
+      <span class="step">Answer</span>
+    </div>
+    <p class="legend">Every step above is captured as a trace in <strong style="color:var(--green)">LangSmith</strong> for debugging and evaluation.</p>
+  </div>
+</div>
+
+<script>
+  const data = {
+    lc:{t:"LangChain — the building blocks",items:[
+      "Uniform chat-model interface: swap OpenAI ↔ Anthropic ↔ Google in one line",
+      "Messages, prompt templates, output parsers & structured output",
+      "Tools and tool calling — let models take actions",
+      "Document loaders, splitters, embeddings, vector stores, retrievers (RAG)",
+      "The Runnable interface (LCEL): compose components, get streaming & batching free"]},
+    lg:{t:"LangGraph — orchestration",items:[
+      "Model your app as a graph: nodes (steps) + edges (transitions) + shared state",
+      "Durable persistence: pause, resume, and survive restarts via checkpointers",
+      "Human-in-the-loop: interrupt for approval or edits, then continue",
+      "Streaming of tokens, state updates and events; time-travel debugging",
+      "Powers multi-agent systems (supervisor, swarm, subgraphs)"]},
+    ls:{t:"LangSmith — production platform",items:[
+      "Observability: a detailed trace of every model call, tool & decision",
+      "Evaluation: datasets + LLM-as-judge to measure quality and catch regressions",
+      "Prompt engineering: versioning, optimization and team collaboration",
+      "Deployment: one-click hosting for long-running agents (LangGraph Platform)",
+      "Works with or without LangChain/LangGraph in your app"]}
+  };
+  const detail = document.getElementById('detail');
+  document.querySelectorAll('.card').forEach(c=>{
+    c.addEventListener('click',()=>{
+      document.querySelectorAll('.card').forEach(x=>x.classList.remove('active'));
+      c.classList.add('active');
+      const d = data[c.dataset.key];
+      detail.innerHTML = '<h3>'+d.t+'</h3><ul>'+d.items.map(i=>'<li>'+i+'</li>').join('')+'</ul>';
+    });
+  });
+</script>
+</body>
+</html>
